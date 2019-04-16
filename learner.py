@@ -9,6 +9,37 @@ import pandas as pd
 import numpy as np
 import matplotlib as plt
 
+# Static Vars
+missing_values = ["n/a", "na", "--", "nan"]
+
+
+# Math
+def get_sqloss(wvec, xvec, y):
+    """
+    :param wvec: weight vector      (d x 1)
+    :param xvec: feature vector     (d x 1)
+    :param y: true label            (scalar)
+    :return: square loss
+    """
+    inprod = np.inner(wvec, xvec)
+    delta = np.subtract(inprod, y)
+    deltasq = np.square(delta)
+    return deltasq
+
+
+def get_empirical_mse(wvec, xvecs, yvec):
+    """
+    :param wvec: weights vector             (d x 1)
+    :param xvecs: feature vectors as rows   (m x d)
+    :param yvec: true label vector          (m x 1)
+    :return: empirical mean square error    (scalar)
+    """
+    innervec = np.matmul(xvecs, wvec)
+    deltavec = np.subtract(innervec, yvec)
+    deltasq = np.square(deltavec)
+    mse = np.mean(deltasq)
+    return mse
+
 
 # Helpers #
 
@@ -37,37 +68,42 @@ def csv_to_dataframe(csv_filename):
     :param csv_filename: csv type data.
     :return: pandas DataFrame
     """
-    return pd.read_csv(csv_filename)
+    return pd.read_csv(csv_filename, na_values=missing_values)
 
 
-def partition_data(dataframe, part_ratio):
+def partition_data(df, part_ratio):
     """
     :param dataframe: a pandas DataFrame holding the data
     :param part_ratio: partition ratio
     :return: training set and test set, both as DataFrame
     """
-    n_of_samples = dataframe.shape[0]
+    n_of_samples = df.shape[0]
     partition_idx = n_of_samples * part_ratio // 100
-    return dataframe.iloc[:, :partition_idx], dataframe.iloc[:, partition_idx:]
+    df = df.sample(frac=1).reset_index(drop=True)  # shuffle df
+    return df.iloc[:partition_idx], df.iloc[partition_idx:]
 
 
 # Training #
+def categorize(to_categorize):
+    return pd.get_dummies(to_categorize, prefix='zip', prefix_sep='_', columns=['zipcode'])
+
 
 def clean(to_clean):
-    pass
+    return to_clean
 
 
-def categorize(to_categorize):
-    pass
-
-
-def preprocess(csv_filename, train_data):
-    categorize(train_data)
-    clean(train_data)
+def preprocess(train_data):
+    categorized = categorize(train_data)
+    cleaned = clean(categorized)
+    return cleaned
 
 
 def train(train_data):
-    preprocess(train_data)
+    preprop = preprocess(train_data)
+    features_to_drop = ['id', 'date', 'price']
+    X = preprop.drop(features_to_drop, axis=1)
+    Y = preprop['price']
+    return X, Y
 
 
 # Final Output #
