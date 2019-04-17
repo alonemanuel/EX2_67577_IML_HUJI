@@ -7,20 +7,23 @@ Brief:  First learning project.
 # Imports
 import pandas as pd
 import numpy as np
-import matplotlib as plt
+import matplotlib.pyplot as plt
+from typing import Tuple
+import logging, sys
 
 # Static Vars
 missing_values = ["n/a", "na", "--", "nan"]
 
 
 # Math
-def get_sigsigt_mat(xmat):
+def get_sigsigt_mat(xmat: np.ndarray):
     """
     :param xmat: matrix to manipulate on
     :return: the \Sigma\Sigma.T matrix, where Sigma is the Sigma from X's svd composition.
     """
     u, d, vh = np.linalg.svd(xmat)
     return np.matmul(d, d.T)
+
 
 def get_sqloss(wvec, xvec, y):
     """
@@ -35,32 +38,55 @@ def get_sqloss(wvec, xvec, y):
     return deltasq
 
 
-def get_empirical_mse(wvec, xvecs, yvec):
+def get_empirical_loss(f_hat, training_data) -> float:
     """
-    :param wvec: weights vector             (d x 1)
-    :param xvecs: feature vectors as cols   (d x m)
+    :param f_hat: estimation function       (d x 1)
+    :param xvecs: feature vectors as *rows* (m x d)
     :param yvec: true label vector          (m x 1)
     :return: empirical mean square error    (scalar)
     """
-    innervec = np.matmul(xvecs.T, wvec)
-    deltavec = np.subtract(innervec, yvec)
+    xvecs, yvec = training_data
+    vecd_f = np.vectorize(f_hat)
+    f_on_data = vecd_f(xvecs)
+    deltavec = np.subtract(f_on_data, yvec)
     deltasq = np.square(deltavec)
-    mse = np.mean(deltasq)
-    return mse
+    return float(np.mean(deltasq))
+
+
+def get_erm_wvec(xvecs, yvec):
+    """
+    :param xvecs: feature vectors as *rows*      (m X d)
+    :param yvec: true labels vector              (d X 1)
+    :return:
+    """
+    xpinv = np.linalg.pinv(xvecs)
+    return np.matmul(xpinv, yvec)
 
 
 # Helpers #
 
+def get_preprop_data(part_ratio: int) -> Tuple[Tuple[np.ndarray, np.ndarray],
+                                               Tuple[np.ndarray, np.ndarray]]:
+    data = get_data()
+    data = preprocess(data)
+    train_data, test_data = partition_data(data, part_ratio)
+    train_x = train_data.drop("price", axis=1)
+    train_y = train_data['price']
+    test_x = test_data.drop("price", axis=1)
+    test_y = test_data['price']
+    train_tuple = (train_x, train_y)
+    test_tuple = (test_x, test_y)
+    return train_tuple, test_tuple
 
-def get_data(partition_ratio):
+
+def get_data():
     """
-
     :param partition_ratio: ratio for partitioning between training set and test set.
     :return: a tuple of training data and test data (both as np arrays)
     """
     data_filename = get_data_filename()
     dataframe = csv_to_dataframe(data_filename)
-    return partition_data(dataframe, partition_ratio)
+    return dataframe
 
 
 def get_data_filename():
@@ -93,45 +119,65 @@ def partition_data(df, part_ratio):
 
 # Training #
 def categorize(to_categorize):
-    return pd.get_dummies(to_categorize, prefix='zip', prefix_sep='_', columns=['zipcode'])
+    return pd.get_dummies(to_categorize, prefix='zip', prefix_sep='_',
+                          columns=['zipcode'])
 
 
 def clean(to_clean):
     return to_clean
 
 
-def preprocess(train_data):
-    categorized = categorize(train_data)
+def preprocess(data):
+    categorized = categorize(data)
     cleaned = clean(categorized)
     return cleaned
 
 
 def train(train_data):
-    preprop = preprocess(train_data)
-    features_to_drop = ['id', 'date', 'price']
-    X = preprop.drop(features_to_drop, axis=1)
-    Y = preprop['price']
-    return X, Y
+    """
+    :param train_data: m samples.
+    :return: learner function that maps a d-feature vector to a value in R.
+    """
+    X, Y = train_data
+    weights = get_erm_wvec(X, Y)
+    learner = lambda x: np.inner(weights, x)
+    return learner  # TODO: does the learner accept feature vectors before preprocessing?
 
 
 # Final Output #
 
 def plotter(train_error, test_error):
-    pass
+    x_axis = np.arange(1, 1000)
+    plt.plot(x_axis, train_error, label="Training Error")
+    plt.plot(x_axis, test_error, label="Test Error")
+    plt.xlabel("Partition Ratio")
+    plt.ylabel("Error rate")
+    plt.legend()
 
 
 def get_train_error(learner, train_data):
-    pass
+    return get_empirical_loss(learner, train_data)
 
 
-def get_test_error(learner, test_data):
-    pass
+def get_test_error(learner: np.ndarray, test_data: Tuple[Tuple, Tuple]) -> \
+        float:
+    # TODO: a copy of the above function... not good
+    return get_empirical_loss(learner, test_data)
 
 
 def main():
-    for partition_ratio in range(100):
-        train_data, test_data = get_data(partition_ratio)
-        learner = train(train_data)
-        train_error = get_train_error(learner, train_data)
-        test_error = get_test_error(learner, test_data)
-        plotter(train_error, test_error)
+    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+    logging.debug("Partitioning")
+    partition_ratios: np.ndarray = np.arange(40, 60)
+    logging.debug("Getting preprocessed data")
+    train_data, test_data = np.vectorize(get_preprop_data)(partition_ratios)
+    # train_data, test_data=np.vectorize(get_preprop_data)(np.arange(1, 101))
+    logging.debug("Training data")
+    learner = np.vectorize(train)(train_data)
+    logging.debug("Getting errors")
+    train_error = np.vectorize(get_train_error)(learner, train_data)
+    test_error = np.vectorize(get_test_error)(learner, test_data)
+    logging.debug("Plotting")
+    plotter(test_error, train_error)
+
+main()

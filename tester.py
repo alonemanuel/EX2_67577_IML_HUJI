@@ -32,24 +32,10 @@ def clean_test(categorized):
     cleaned = lrn.clean(categorized)
     print("Cleaned:")
     print(cleaned.head())
-    # preprocess_test(cleaned)
+    lrn.main()
 
-
-# def preprocess_test(train_data):
-#     preprop_data = lrn.preprocess(train_data)
-#     print("Preprocessed data:")
-#     print(preprop_data.head())
-#     train_test(train_data)
-#
-# def train_test(train_data):
-#     X, Y = lrn.train(train_data)
-#     print('X:')
-#     print(X)
-#     print('Y:')
-#     print(Y)
 
 def main():
     get_data_filename_test()
-
 
 main()
