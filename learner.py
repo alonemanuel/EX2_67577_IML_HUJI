@@ -14,6 +14,14 @@ missing_values = ["n/a", "na", "--", "nan"]
 
 
 # Math
+def get_sigsigt_mat(xmat):
+    """
+    :param xmat: matrix to manipulate on
+    :return: the \Sigma\Sigma.T matrix, where Sigma is the Sigma from X's svd composition.
+    """
+    u, d, vh = np.linalg.svd(xmat)
+    return np.matmul(d, d.T)
+
 def get_sqloss(wvec, xvec, y):
     """
     :param wvec: weight vector      (d x 1)
@@ -30,11 +38,11 @@ def get_sqloss(wvec, xvec, y):
 def get_empirical_mse(wvec, xvecs, yvec):
     """
     :param wvec: weights vector             (d x 1)
-    :param xvecs: feature vectors as rows   (m x d)
+    :param xvecs: feature vectors as cols   (d x m)
     :param yvec: true label vector          (m x 1)
     :return: empirical mean square error    (scalar)
     """
-    innervec = np.matmul(xvecs, wvec)
+    innervec = np.matmul(xvecs.T, wvec)
     deltavec = np.subtract(innervec, yvec)
     deltasq = np.square(deltavec)
     mse = np.mean(deltasq)
