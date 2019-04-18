@@ -38,7 +38,7 @@ def get_sqloss(wvec, xvec, y):
     return deltasq
 
 
-def get_empirical_loss(f_hat, training_data) -> float:
+def get_empirical_loss(f_hat, training_data):
     """
     :param f_hat: estimation function       (d x 1)
     :param xvecs: feature vectors as *rows* (m x d)
@@ -46,11 +46,15 @@ def get_empirical_loss(f_hat, training_data) -> float:
     :return: empirical mean square error    (scalar)
     """
     xvecs, yvec = training_data
-    vecd_f = np.vectorize(f_hat)
-    f_on_data = vecd_f(xvecs)
+    # vecd_f = np.vectorize(f_hat)
+    # print(xvecs.shape)
+    # print(yvec.shape)
+    f_on_data = f_hat(xvecs)
+    # print(f_on_data.shape, yvec.shape)
     deltavec = np.subtract(f_on_data, yvec)
     deltasq = np.square(deltavec)
-    return float(np.mean(deltasq))
+    # print(deltasq)
+    return np.mean(deltasq)
 
 
 def get_erm_wvec(xvecs, yvec):
@@ -59,6 +63,7 @@ def get_erm_wvec(xvecs, yvec):
     :param yvec: true labels vector              (d X 1)
     :return:
     """
+    # print(xvecs)
     xpinv = np.linalg.pinv(xvecs)
     return np.matmul(xpinv, yvec)
 
@@ -68,15 +73,14 @@ def get_erm_wvec(xvecs, yvec):
 def get_preprop_data(part_ratio: int) -> Tuple[Tuple[np.ndarray, np.ndarray],
                                                Tuple[np.ndarray, np.ndarray]]:
     data = get_data()
-    data = preprocess(data)
-    train_data, test_data = partition_data(data, part_ratio)
+    preprocessed = preprocess(data)
+    # preprocessed.to_csv(path_or_buf='./datatest.csv') # TODO: debug
+    train_data, test_data = partition_data(preprocessed, part_ratio)
     train_x = train_data.drop("price", axis=1)
     train_y = train_data['price']
     test_x = test_data.drop("price", axis=1)
     test_y = test_data['price']
-    train_tuple = (train_x, train_y)
-    test_tuple = (test_x, test_y)
-    return train_tuple, test_tuple
+    return (train_x, train_y), (test_x, test_y)
 
 
 def get_data():
@@ -124,13 +128,15 @@ def categorize(to_categorize):
 
 
 def clean(to_clean):
-    return to_clean
+    features_to_drop = ['id', 'date']
+    dropped = to_clean.drop(features_to_drop, axis='columns')
+    numeric = dropped.apply(pd.to_numeric, errors='coerce')
+    return numeric.dropna()
 
 
 def preprocess(data):
-    categorized = categorize(data)
-    cleaned = clean(categorized)
-    return cleaned
+    data = categorize(data)
+    return clean(data)
 
 
 def train(train_data):
@@ -140,19 +146,25 @@ def train(train_data):
     """
     X, Y = train_data
     weights = get_erm_wvec(X, Y)
-    learner = lambda x: np.inner(weights, x)
+    print('weights', weights.shape)
+    print(weights)
+    # print('weights', weights.shape)
+    # print('X', X.shape)
+    learner = lambda x: np.matmul(x, weights)
     return learner  # TODO: does the learner accept feature vectors before preprocessing?
 
 
 # Final Output #
 
 def plotter(train_error, test_error):
-    x_axis = np.arange(1, 1000)
+    x_axis = np.arange(1, 100)
     plt.plot(x_axis, train_error, label="Training Error")
     plt.plot(x_axis, test_error, label="Test Error")
     plt.xlabel("Partition Ratio")
     plt.ylabel("Error rate")
+    plt.yscale('log')
     plt.legend()
+    plt.savefig('./plswork.png')
 
 
 def get_train_error(learner, train_data):
@@ -168,16 +180,18 @@ def get_test_error(learner: np.ndarray, test_data: Tuple[Tuple, Tuple]) -> \
 def main():
     logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
     logging.debug("Partitioning")
-    partition_ratios: np.ndarray = np.arange(40, 60)
+    partition_ratios = np.arange(1, 100)
     logging.debug("Getting preprocessed data")
     train_data, test_data = np.vectorize(get_preprop_data)(partition_ratios)
     # train_data, test_data=np.vectorize(get_preprop_data)(np.arange(1, 101))
     logging.debug("Training data")
     learner = np.vectorize(train)(train_data)
+    # print(learner.shape) #TODO: DEBUG
     logging.debug("Getting errors")
     train_error = np.vectorize(get_train_error)(learner, train_data)
     test_error = np.vectorize(get_test_error)(learner, test_data)
     logging.debug("Plotting")
     plotter(test_error, train_error)
+
 
 main()
